@@ -129,6 +129,9 @@ where
                 })
             }
         };
+
+        // DEBT?: Why do we need this if everything is in the claims? When would
+        // gatekeeper forward us two unrelated items?
         let user_id = match req
             .headers()
             .get("x-forwarded-user-subject")
@@ -148,7 +151,14 @@ where
                 return Err(ServiceError::Unauthorized.into());
             }
 
-            match claims_set.registered.subject {
+            // For M2M tokens, we set a custom claim to say who the key belongs to.
+            let subject = serde_json::from_value::<String>(
+                claims_set.private["https://sso.mozilla.com/claim/subject_assumed"].take(),
+            )
+            .ok()
+            .or(claims_set.registered.subject);
+
+            match subject {
                 Some(ref sub) if sub != &user_id => return Err(ServiceError::Unauthorized.into()),
                 _ => {}
             }
